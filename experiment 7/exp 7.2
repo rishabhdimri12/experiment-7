@@ -1,0 +1,51 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const bodyParser = require('body-parser');
+
+const app = express();
+app.use(bodyParser.json());
+
+const SECRET_KEY = 'myjwtsecret';
+let accountBalance = 1000;
+
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  if (username === 'user' && password === 'password123') {
+    const token = jwt.sign({ username }, SECRET_KEY, { expiresIn: '1h' });
+    return res.json({ token });
+  }
+  res.status(401).json({ error: 'Invalid credentials' });
+});
+
+const verifyToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  if (!authHeader) return res.status(401).json({ error: 'Missing Authorization header' });
+  const token = authHeader.split(' ')[1];
+  jwt.verify(token, SECRET_KEY, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid or expired token' });
+    req.user = user;
+    next();
+  });
+};
+
+app.get('/balance', verifyToken, (req, res) => {
+  res.json({ balance: accountBalance });
+});
+
+app.post('/deposit', verifyToken, (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid deposit amount' });
+  accountBalance += amount;
+  res.json({ message: 'Deposit successful', newBalance: accountBalance });
+});
+
+app.post('/withdraw', verifyToken, (req, res) => {
+  const { amount } = req.body;
+  if (!amount || amount <= 0) return res.status(400).json({ error: 'Invalid withdrawal amount' });
+  if (amount > accountBalance) return res.status(400).json({ error: 'Insufficient balance' });
+  accountBalance -= amount;
+  res.json({ message: 'Withdrawal successful', newBalance: accountBalance });
+});
+
+const PORT = 3000;
+app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
